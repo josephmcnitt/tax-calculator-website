@@ -7,6 +7,10 @@ export default function handler(req, res) {
     'Access-Control-Allow-Headers',
     'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
   );
+  
+  // Set security headers
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' https://*.vercel.app; style-src 'self' 'unsafe-inline';");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
 
   // Handle OPTIONS request
   if (req.method === 'OPTIONS') {
