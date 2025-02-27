@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Vercel API</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .chat-container {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+            height: 400px;
+            overflow-y: auto;
+        }
+        .message {
+            margin-bottom: 10px;
+            padding: 10px;
+            border-radius: 8px;
+        }
+        .user-message {
+            background-color: #e6f7ff;
+            text-align: right;
+        }
+        .assistant-message {
+            background-color: #f0f0f0;
+        }
+        .input-container {
+            display: flex;
+            margin-top: 20px;
+        }
+        input {
+            flex-grow: 1;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px 0 0 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background-color: #1890ff;
+            color: white;
+            border: none;
+            border-radius: 0 4px 4px 0;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #ccc;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+        }
+        .online {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .offline {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .checking {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Vercel API</h1>
+    
+    <div class="status checking" id="status">Checking server status...</div>
+    
+    <div class="chat-container" id="chat-container">
+        <div id="messages"></div>
+    </div>
+    
+    <div class="input-container">
+        <input type="text" id="message-input" placeholder="Ask a question about taxes..." disabled>
+        <button id="send-button" disabled>Send</button>
+    </div>
+
+    <script>
+        const statusElement = document.getElementById('status');
+        const messagesElement = document.getElementById('messages');
+        const messageInput = document.getElementById('message-input');
+        const sendButton = document.getElementById('send-button');
+        
+        // API base URL - change this to match your server
+        const API_BASE_URL = 'http://localhost:3002';
+        
+        // Check server status
+        async function checkServerStatus() {
+            try {
+                statusElement.className = 'status checking';
+                statusElement.textContent = 'Checking server status...';
+                
+                const response = await fetch(`${API_BASE_URL}/api/test`);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    statusElement.className = 'status online';
+                    statusElement.textContent = `Server is online (Port: ${data.port})`;
+                    
+                    // Enable input and button
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                    
+                    return true;
+                } else {
+                    throw new Error('Server returned an error');
+                }
+            } catch (error) {
+                console.error('Server status check error:', error);
+                statusElement.className = 'status offline';
+                statusElement.textContent = 'Server is offline. Please start the server.';
+                
+                // Disable input and button
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+                
+                return false;
+            }
+        }
+        
+        // Send message to API
+        async function sendMessage(message) {
+            try {
+                // Add user message to chat
+                addMessage('user', message);
+                
+                // Clear input
+                messageInput.value = '';
+                
+                // Disable input and button while loading
+                messageInput.disabled = true;
+                sendButton.disabled = true;
+                
+                // Add loading message
+                const loadingId = 'loading-' + Date.now();
+                addLoadingMessage(loadingId);
+                
+                // Send request to API
+                const response = await fetch(`${API_BASE_URL}/api/chat`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message }),
+                });
+                
+                // Remove loading message
+                removeLoadingMessage(loadingId);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    addMessage('assistant', data.message);
+                } else {
+                    const errorData = await response.json();
+                    addMessage('assistant', `Error: ${errorData.message || 'Unknown error'}`);
+                }
+            } catch (error) {
+                console.error('Error sending message:', error);
+                addMessage('assistant', `Error: ${error.message}`);
+                
+                // Check if server is still online
+                await checkServerStatus();
+            } finally {
+                // Re-enable input and button if server is online
+                if (statusElement.className === 'status online') {
+                    messageInput.disabled = false;
+                    sendButton.disabled = false;
+                }
+                
+                // Focus input
+                messageInput.focus();
+            }
+        }
+        
+        // Add message to chat
+        function addMessage(role, content) {
+            const messageElement = document.createElement('div');
+            messageElement.className = `message ${role}-message`;
+            messageElement.textContent = content;
+            messagesElement.appendChild(messageElement);
+            
+            // Scroll to bottom
+            messagesElement.scrollTop = messagesElement.scrollHeight;
+        }
+        
+        // Add loading message
+        function addLoadingMessage(id) {
+            const loadingElement = document.createElement('div');
+            loadingElement.id = id;
+            loadingElement.className = 'message assistant-message';
+            loadingElement.textContent = 'Thinking...';
+            messagesElement.appendChild(loadingElement);
+            
+            // Scroll to bottom
+            messagesElement.scrollTop = messagesElement.scrollHeight;
+        }
+        
+        // Remove loading message
+        function removeLoadingMessage(id) {
+            const loadingElement = document.getElementById(id);
+            if (loadingElement) {
+                loadingElement.remove();
+            }
+        }
+        
+        // Event listeners
+        sendButton.addEventListener('click', () => {
+            const message = messageInput.value.trim();
+            if (message) {
+                sendMessage(message);
+            }
+        });
+        
+        messageInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                const message = messageInput.value.trim();
+                if (message) {
+                    sendMessage(message);
+                }
+            }
+        });
+        
+        // Check server status on page load
+        checkServerStatus();
+        
+        // Add retry button to status element
+        const retryButton = document.createElement('button');
+        retryButton.textContent = 'Retry Connection';
+        retryButton.style.marginLeft = '10px';
+        retryButton.addEventListener('click', checkServerStatus);
+        statusElement.appendChild(retryButton);
+    </script>
+</body>
+</html> 
