@@ -1,10 +1,9 @@
-import { Configuration, OpenAIApi } from 'openai';
+import OpenAI from 'openai';
 
-const configuration = new Configuration({
+// Initialize the OpenAI client
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-
-const openai = new OpenAIApi(configuration);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
@@ -13,8 +12,17 @@ export default async function handler(req, res) {
 
   try {
     const { message } = req.body;
+    
+    if (!message) {
+      return res.status(400).json({ message: 'Message is required' });
+    }
 
-    const completion = await openai.createChatCompletion({
+    if (!process.env.OPENAI_API_KEY) {
+      console.error('OPENAI_API_KEY is not defined');
+      return res.status(500).json({ message: 'OpenAI API key is not configured' });
+    }
+
+    const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
         {
@@ -28,9 +36,14 @@ export default async function handler(req, res) {
       ],
     });
 
-    res.status(200).json({ message: completion.data.choices[0].message.content });
+    const responseMessage = completion.choices[0].message.content;
+    return res.status(200).json({ message: responseMessage });
+    
   } catch (error) {
-    console.error('Error:', error);
-    res.status(500).json({ message: 'An error occurred while processing your request.' });
+    console.error('Error in chat API:', error.message);
+    res.status(500).json({ 
+      message: 'An error occurred while processing your request.',
+      error: error.message
+    });
   }
 } 

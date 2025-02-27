@@ -72,6 +72,34 @@ This will:
    npm start
    ```
 
+## Deploying to Vercel
+
+This application is configured to work with Vercel deployment:
+
+1. Install the Vercel CLI:
+   ```
+   npm install -g vercel
+   ```
+
+2. Login to Vercel:
+   ```
+   vercel login
+   ```
+
+3. Deploy the application:
+   ```
+   vercel
+   ```
+
+4. Set up environment variables in the Vercel dashboard:
+   - Go to your project settings
+   - Add the `OPENAI_API_KEY` environment variable with your OpenAI API key
+
+5. For production deployment:
+   ```
+   vercel --prod
+   ```
+
 ## Troubleshooting
 
 ### "Failed to fetch" Error
@@ -98,13 +126,23 @@ If you're having issues with the OpenAI API key:
 2. Check that the key is valid and has not expired
 3. Verify you have sufficient credits in your OpenAI account
 
+### Vercel Deployment Issues
+
+If you're having issues with Vercel deployment:
+
+1. Check that your OpenAI API key is correctly set in the Vercel environment variables
+2. Verify that the API routes are properly configured
+3. Check the Vercel deployment logs for any errors
+
 ## Project Structure
 
-- `server.js` - Express server that handles API requests
+- `server.js` - Express server that handles API requests (for local development)
 - `src/` - React frontend source code
 - `src/components/ChatBot.jsx` - Chatbot component
-- `start-server.js` - Script to start the server with automatic port selection
-- `kill-server.js` - Script to kill processes on port 3001
+- `src/pages/api/` - API routes for Vercel deployment
+- `start-server.js` - Script to start the server with automatic port selection (local only)
+- `kill-server.js` - Script to kill processes on port 3001 (local only)
+- `vercel.json` - Configuration for Vercel deployment
 
 ## License
 
@@ -115,3 +153,4 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - OpenAI for providing the API
 - React for the frontend framework
 - Express for the backend server
+- Vercel for hosting

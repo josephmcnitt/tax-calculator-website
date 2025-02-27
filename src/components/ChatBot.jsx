@@ -20,7 +20,7 @@ const ChatBot = () => {
   const checkServerStatus = async () => {
     try {
       setServerStatus('checking');
-      const response = await fetch('http://localhost:3001/api/test', {
+      const response = await fetch('/api/test', {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -84,7 +84,7 @@ const ChatBot = () => {
       if (!isServerOnline) {
         setMessages(prev => [...prev, { 
           role: 'assistant', 
-          content: `I'm sorry, I can't connect to the server. Please make sure the server is running on port 3001.` 
+          content: `I'm sorry, I can't connect to the server. Please try again later.` 
         }]);
         return;
       }
@@ -102,7 +102,7 @@ const ChatBot = () => {
       });
       
       // Create the fetch promise
-      const fetchPromise = fetch('http://localhost:3001/api/chat', {
+      const fetchPromise = fetch('/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -144,7 +144,7 @@ const ChatBot = () => {
         
         // Provide more user-friendly error messages
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-          errorMessage = 'Network error. Please check your internet connection and make sure the server is running.';
+          errorMessage = 'Network error. Please check your internet connection.';
           // Update server status
           setServerStatus('offline');
         } else if (error.message.includes('timed out')) {
@@ -214,7 +214,7 @@ const ChatBot = () => {
           <div className="text-center text-gray-500 mt-32">
             <p>Ask me anything about taxes, government spending, or financial matters.</p>
             {serverStatus === 'offline' && (
-              <p className="text-red-500 mt-2">Server is offline. Please start the server.</p>
+              <p className="text-red-500 mt-2">Server is offline. Please try again later.</p>
             )}
           </div>
         ) : (
@@ -248,46 +248,31 @@ const ChatBot = () => {
           </div>
         )}
         {error && !isLoading && !isRateLimited && (
-          <div className="text-center mt-2">
-            <p className="text-red-500 mb-2">{error}</p>
-            <button
+          <div className="text-center text-red-500 mt-2">
+            <p>{error}</p>
+            <button 
               onClick={handleRetry}
-              className="px-4 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+              className="mt-2 px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
             >
-              Try Again
-            </button>
-          </div>
-        )}
-        {serverStatus === 'offline' && !isLoading && (
-          <div className="text-center mt-2">
-            <p className="text-red-500 mb-2">Server is offline</p>
-            <button
-              onClick={checkServerStatus}
-              className="px-4 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
-            >
-              Check Connection
+              Retry
             </button>
           </div>
         )}
       </div>
       <form onSubmit={handleSubmit} className="p-4 border-t">
-        <div className="flex gap-2">
+        <div className="flex">
           <input
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question about taxes..."
-            className="flex-1 p-2 border rounded"
-            disabled={isLoading || isRateLimited || serverStatus === 'offline'}
+            placeholder="Ask a question..."
+            className="flex-grow p-2 border rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={isLoading || serverStatus === 'offline'}
           />
           <button
             type="submit"
-            className={`px-4 py-2 text-white rounded ${
-              isLoading || isRateLimited || !input.trim() || serverStatus === 'offline'
-                ? 'bg-gray-400 cursor-not-allowed' 
-                : 'bg-blue-500 hover:bg-blue-600'
-            }`}
-            disabled={isLoading || isRateLimited || !input.trim() || serverStatus === 'offline'}
+            className="bg-blue-500 text-white p-2 rounded-r hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
+            disabled={isLoading || serverStatus === 'offline'}
           >
             Send
           </button>
