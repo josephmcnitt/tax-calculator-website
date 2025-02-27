@@ -19,7 +19,7 @@
     },
     {
       "src": "/test.html",
-      "dest": "/test.html"
+      "dest": "/public/test.html"
     },
     {
       "src": "/(.*)",
