@@ -7,8 +7,42 @@ const ChatBot = () => {
   const [retryCount, setRetryCount] = useState(0);
   const [isRateLimited, setIsRateLimited] = useState(false);
   const [error, setError] = useState(null);
+  const [serverStatus, setServerStatus] = useState('checking'); // 'checking', 'online', 'offline'
   const lastMessageRef = useRef('');
   const chatContainerRef = useRef(null);
+  
+  // Check server status on component mount
+  useEffect(() => {
+    checkServerStatus();
+  }, []);
+  
+  // Function to check if the server is running
+  const checkServerStatus = async () => {
+    try {
+      setServerStatus('checking');
+      const response = await fetch('http://localhost:3001/api/test', {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      }).catch(error => {
+        console.error('Server check failed:', error);
+        throw new Error('Cannot connect to server');
+      });
+      
+      if (response.ok) {
+        setServerStatus('online');
+        return true;
+      } else {
+        setServerStatus('offline');
+        return false;
+      }
+    } catch (error) {
+      console.error('Server status check error:', error);
+      setServerStatus('offline');
+      return false;
+    }
+  };
   
   // Scroll to bottom of chat when messages change
   useEffect(() => {
@@ -43,6 +77,18 @@ const ChatBot = () => {
 
   const sendMessage = async (messageText) => {
     if (!messageText.trim()) return;
+    
+    // Check server status before sending message
+    if (serverStatus !== 'online') {
+      const isServerOnline = await checkServerStatus();
+      if (!isServerOnline) {
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: `I'm sorry, I can't connect to the server. Please make sure the server is running on port 3001.` 
+        }]);
+        return;
+      }
+    }
     
     setIsLoading(true);
     setError(null);
@@ -99,6 +145,8 @@ const ChatBot = () => {
         // Provide more user-friendly error messages
         if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
           errorMessage = 'Network error. Please check your internet connection and make sure the server is running.';
+          // Update server status
+          setServerStatus('offline');
         } else if (error.message.includes('timed out')) {
           errorMessage = 'Request timed out. The server might be experiencing high load.';
         }
@@ -146,19 +194,28 @@ const ChatBot = () => {
     <div className="fixed bottom-4 right-4 w-96 bg-white shadow-lg rounded-lg">
       <div className="p-4 border-b flex justify-between items-center">
         <h3 className="text-lg font-semibold">Tax Assistant</h3>
-        {messages.length > 0 && (
-          <button 
-            onClick={() => setMessages([])} 
-            className="text-xs text-gray-500 hover:text-gray-700"
-          >
-            Clear Chat
-          </button>
-        )}
+        <div className="flex items-center">
+          <div className={`w-3 h-3 rounded-full mr-2 ${
+            serverStatus === 'online' ? 'bg-green-500' : 
+            serverStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
+          }`}></div>
+          {messages.length > 0 && (
+            <button 
+              onClick={() => setMessages([])} 
+              className="text-xs text-gray-500 hover:text-gray-700"
+            >
+              Clear Chat
+            </button>
+          )}
+        </div>
       </div>
       <div ref={chatContainerRef} className="h-96 overflow-y-auto p-4">
         {messages.length === 0 ? (
           <div className="text-center text-gray-500 mt-32">
             <p>Ask me anything about taxes, government spending, or financial matters.</p>
+            {serverStatus === 'offline' && (
+              <p className="text-red-500 mt-2">Server is offline. Please start the server.</p>
+            )}
           </div>
         ) : (
           messages.map((msg, index) => (
@@ -201,6 +258,17 @@ const ChatBot = () => {
             </button>
           </div>
         )}
+        {serverStatus === 'offline' && !isLoading && (
+          <div className="text-center mt-2">
+            <p className="text-red-500 mb-2">Server is offline</p>
+            <button
+              onClick={checkServerStatus}
+              className="px-4 py-1 bg-blue-500 text-white text-sm rounded hover:bg-blue-600"
+            >
+              Check Connection
+            </button>
+          </div>
+        )}
       </div>
       <form onSubmit={handleSubmit} className="p-4 border-t">
         <div className="flex gap-2">
@@ -210,16 +278,16 @@ const ChatBot = () => {
             onChange={(e) => setInput(e.target.value)}
             placeholder="Ask a question about taxes..."
             className="flex-1 p-2 border rounded"
-            disabled={isLoading || isRateLimited}
+            disabled={isLoading || isRateLimited || serverStatus === 'offline'}
           />
           <button
             type="submit"
             className={`px-4 py-2 text-white rounded ${
-              isLoading || isRateLimited || !input.trim()
+              isLoading || isRateLimited || !input.trim() || serverStatus === 'offline'
                 ? 'bg-gray-400 cursor-not-allowed' 
                 : 'bg-blue-500 hover:bg-blue-600'
             }`}
-            disabled={isLoading || isRateLimited || !input.trim()}
+            disabled={isLoading || isRateLimited || !input.trim() || serverStatus === 'offline'}
           >
             Send
           </button>
