@@ -1,8 +1,9 @@
 import React from 'react';
 import dynamic from 'next/dynamic';
 
-// Dynamically import the ChatBot component with SSR disabled
+// Dynamically import components with SSR disabled to prevent window/navigator errors
 const ChatBot = dynamic(() => import('../components/ChatBot'), { ssr: false });
+const TaxCalculator = dynamic(() => import('../TaxCalculator'), { ssr: false });
 
 export default function Home() {
   return (
@@ -12,9 +13,20 @@ export default function Home() {
           Tax Calculator and Information
         </h1>
         <p className="description">
-          Ask questions about taxes, government spending, or financial matters.
+          Calculate your taxes and ask questions about taxes, government spending, or financial matters.
         </p>
-        <ChatBot />
+        
+        {/* Tax Calculator Section */}
+        <div className="calculator-section">
+          <h2 className="section-title">Tax Breakdown Calculator</h2>
+          <TaxCalculator />
+        </div>
+        
+        {/* ChatBot Section */}
+        <div className="chatbot-section">
+          <h2 className="section-title">Tax Assistant</h2>
+          <ChatBot />
+        </div>
       </main>
 
       <style jsx>{`
@@ -23,31 +35,52 @@ export default function Home() {
           padding: 0 0.5rem;
           display: flex;
           flex-direction: column;
-          justify-content: center;
           align-items: center;
         }
 
         main {
-          padding: 5rem 0;
+          padding: 2rem 0;
           flex: 1;
           display: flex;
           flex-direction: column;
-          justify-content: center;
           align-items: center;
+          width: 100%;
+          max-width: 1200px;
         }
 
         .title {
           margin: 0;
           line-height: 1.15;
-          font-size: 4rem;
+          font-size: 3rem;
           text-align: center;
         }
 
         .description {
           text-align: center;
           line-height: 1.5;
-          font-size: 1.5rem;
+          font-size: 1.2rem;
           margin: 1rem 0 2rem;
+        }
+        
+        .section-title {
+          font-size: 1.8rem;
+          margin: 2rem 0 1rem;
+          text-align: center;
+        }
+        
+        .calculator-section, .chatbot-section {
+          width: 100%;
+          margin-bottom: 3rem;
+        }
+        
+        @media (min-width: 768px) {
+          .title {
+            font-size: 4rem;
+          }
+          
+          .description {
+            font-size: 1.5rem;
+          }
         }
       `}</style>
 
