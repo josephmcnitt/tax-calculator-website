@@ -1,33 +1,33 @@
 {
-  "name": "react",
+  "name": "tax-calculator-website",
   "version": "1.0.0",
-  "description": "",
-  "keywords": [],
-  "main": "src/index.tsx",
+  "description": "A web application that provides tax information and calculations through a chatbot interface",
+  "keywords": ["tax", "calculator", "chatbot", "openai"],
+  "main": "src/index.js",
   "dependencies": {
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "react-scripts": "^5.0.0",
-    "recharts": "2.15.1",
+    "next": "^14.0.4",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "openai": "^4.20.1",
     "express": "^4.18.2",
-    "openai": "^3.2.1",
     "dotenv": "^16.3.1",
     "cors": "^2.8.5"
   },
   "devDependencies": {
-    "@types/react": "19.0.0",
-    "@types/react-dom": "19.0.0",
-    "loader-utils": "3.2.1",
-    "typescript": "4.9.5",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
+    "eslint": "^8.55.0",
+    "eslint-config-next": "^14.0.4",
+    "typescript": "^5.3.3",
     "concurrently": "^8.2.2"
   },
   "scripts": {
-    "start": "react-scripts start",
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
     "server": "node server.js",
-    "dev": "concurrently \"npm run server\" \"npm run start\"",
-    "build": "react-scripts build",
-    "test": "react-scripts test --env=jsdom",
-    "eject": "react-scripts eject"
+    "dev:server": "concurrently \"npm run server\" \"npm run dev\""
   },
   "browserslist": [
     ">0.2%",
