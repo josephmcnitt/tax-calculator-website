@@ -49,29 +49,69 @@ const ChatBot = () => {
     
     try {
       console.log('Sending message to API:', messageText);
-      const response = await fetch('http://localhost:3001/api/chat', {
+      
+      // Create a timeout promise
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Request timed out')), 30000);
+      });
+      
+      // Create the fetch promise
+      const fetchPromise = fetch('http://localhost:3001/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ message: messageText }),
       });
-
+      
+      // Race the timeout against the fetch
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+      
+      console.log('Response status:', response.status);
+      
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get response');
+        let errorMessage = 'Failed to get response';
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorData.error || errorMessage;
+          
+          // Check if it's a rate limit error
+          if (response.status === 429 || errorData.error === 'RATE_LIMIT') {
+            setIsRateLimited(true);
+            setRetryCount(prev => prev + 1);
+            throw new Error('Rate limit exceeded');
+          }
+        } catch (jsonError) {
+          console.error('Error parsing error response:', jsonError);
+        }
+        throw new Error(errorMessage);
       }
 
       const data = await response.json();
       setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
     } catch (error) {
-      console.error('Error:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `I'm sorry, I encountered an error: ${error.message}. Please check the console for more details.` 
-      }]);
+      console.error('Error details:', error);
+      
+      // Don't add error message if it's a rate limit error (will be retried)
+      if (!isRateLimited) {
+        let errorMessage = error.message;
+        
+        // Provide more user-friendly error messages
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          errorMessage = 'Network error. Please check your internet connection and make sure the server is running.';
+        } else if (error.message.includes('timed out')) {
+          errorMessage = 'Request timed out. The server might be experiencing high load.';
+        }
+        
+        setMessages(prev => [...prev, { 
+          role: 'assistant', 
+          content: `I'm sorry, I encountered an error: ${errorMessage}. Please try again later.` 
+        }]);
+      }
     } finally {
-      setIsLoading(false);
+      if (!isRateLimited) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -85,33 +125,9 @@ const ChatBot = () => {
     const userInput = input;
     setInput('');
     lastMessageRef.current = userInput; // Save the message for potential retries
-    setIsLoading(true);
-
-    try {
-      const response = await fetch('http://localhost:3001/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ message: userInput }),
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to get response');
-      }
-
-      const data = await response.json();
-      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
-    } catch (error) {
-      console.error('Error:', error);
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: `I'm sorry, I encountered an error: ${error.message}. Please check the console for more details.` 
-      }]);
-    } finally {
-      setIsLoading(false);
-    }
+    
+    // Call the sendMessage function
+    await sendMessage(userInput);
   };
   
   const handleRetry = () => {
