@@ -31,8 +31,5 @@
         "Referrer-Policy": "strict-origin-when-cross-origin"
       }
     }
-  ],
-  "env": {
-    "OPENAI_API_KEY": "@openai_api_key"
-  }
+  ]
 } 
