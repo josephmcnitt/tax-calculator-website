@@ -8,9 +8,16 @@ const app = express();
 const PORT = process.env.PORT || 3001;
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: 'http://localhost:3000', // Allow requests from React app
+  credentials: true
+}));
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'build')));
+
+// Log the API key (first few characters only for security)
+const apiKey = process.env.OPENAI_API_KEY;
+console.log('API Key first few chars:', apiKey ? apiKey.substring(0, 10) + '...' : 'Not found');
 
 // Configure OpenAI
 const configuration = new Configuration({
@@ -117,6 +124,8 @@ app.post('/api/chat', async (req, res) => {
     console.log('Processing message:', message);
     const completion = await callOpenAIWithRetry(message);
     console.log('Received response from OpenAI');
+    
+    // Updated to match the new OpenAI SDK response format
     res.status(200).json({ message: completion.data.choices[0].message.content });
   } catch (error) {
     // Log detailed error information

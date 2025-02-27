@@ -57,81 +57,19 @@ const ChatBot = () => {
         body: JSON.stringify({ message: messageText }),
       });
 
-      // First check if the response is ok
       if (!response.ok) {
         const errorData = await response.json();
-        console.error('API Error:', response.status, errorData);
-        
-        // Check if we hit a rate limit
-        if (response.status === 429) {
-          setIsRateLimited(true);
-          setRetryCount(prev => prev + 1);
-          
-          // Only add the rate limit message if it's the first attempt
-          if (retryCount === 0) {
-            setMessages(prev => [...prev, { 
-              role: 'assistant', 
-              content: 'I\'m currently experiencing high demand. Please wait while I try again...' 
-            }]);
-          }
-          
-          return;
-        }
-        
-        // Check for timeout
-        if (response.status === 408) {
-          if (retryCount < 3) {
-            // Retry automatically for timeouts
-            setRetryCount(prev => prev + 1);
-            setIsRateLimited(true);
-            
-            if (retryCount === 0) {
-              setMessages(prev => [...prev, { 
-                role: 'assistant', 
-                content: 'The request is taking longer than expected. I\'ll try again shortly...' 
-              }]);
-            }
-            return;
-          } else {
-            // After 3 retries, give up
-            throw new Error('Request timed out after multiple attempts');
-          }
-        }
-        
-        // For other errors, throw with the server's error message if available
-        throw new Error(errorData.message || `Server responded with status: ${response.status}`);
+        throw new Error(errorData.error || 'Failed to get response');
       }
 
       const data = await response.json();
-      
-      // Reset retry count on successful response
-      setRetryCount(0);
-      setIsRateLimited(false);
-      setError(null);
       setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
     } catch (error) {
       console.error('Error:', error);
-      
-      let errorMessage = 'Sorry, I encountered an error. Please try again later.';
-      
-      // Customize error message based on the error
-      if (error.message.includes('timed out')) {
-        errorMessage = 'The request timed out. The service might be experiencing high load. Please try again later.';
-      } else if (error.message.includes('authentication problem')) {
-        errorMessage = 'There is an issue with the AI service authentication. The administrator has been notified.';
-      } else if (error.message.includes('API Error')) {
-        errorMessage = error.message; // Use the server's error message
-      } else if (!navigator.onLine) {
-        errorMessage = 'You appear to be offline. Please check your internet connection and try again.';
-      }
-      
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: errorMessage
+        content: `I'm sorry, I encountered an error: ${error.message}. Please check the console for more details.` 
       }]);
-      setRetryCount(0);
-      setIsRateLimited(false);
-      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -139,17 +77,41 @@ const ChatBot = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim() || isLoading || isRateLimited) return;
+    if (!input.trim()) return;
 
     // Add user message
     const userMessage = { role: 'user', content: input };
     setMessages([...messages, userMessage]);
-    
-    // Store the message for potential retries
-    lastMessageRef.current = input;
+    const userInput = input;
     setInput('');
-    
-    await sendMessage(input);
+    lastMessageRef.current = userInput; // Save the message for potential retries
+    setIsLoading(true);
+
+    try {
+      const response = await fetch('http://localhost:3001/api/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: userInput }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get response');
+      }
+
+      const data = await response.json();
+      setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+    } catch (error) {
+      console.error('Error:', error);
+      setMessages(prev => [...prev, { 
+        role: 'assistant', 
+        content: `I'm sorry, I encountered an error: ${error.message}. Please check the console for more details.` 
+      }]);
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const handleRetry = () => {
