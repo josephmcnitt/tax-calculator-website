@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            padding: 20px;
+            margin-top: 20px;
+        }
+        .result {
+            margin-top: 20px;
+            padding: 10px;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .loading {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        button {
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background-color: #0069d9;
+        }
+        input {
+            padding: 8px;
+            width: 100%;
+            margin-bottom: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status {
+            font-size: 14px;
+            padding: 5px 10px;
+            border-radius: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Test Page</h1>
+    <p>Use this page to test if the API endpoints are working correctly.</p>
+
+    <div class="container">
+        <div class="header">
+            <h2>Test API Endpoint</h2>
+            <span id="testStatus" class="status">Unknown</span>
+        </div>
+        <p>This will test the basic API connectivity and configuration.</p>
+        <button id="testApiBtn">Test API</button>
+        <div id="testResult" class="result"></div>
+    </div>
+
+    <div class="container">
+        <div class="header">
+            <h2>Chat API Endpoint</h2>
+            <span id="chatStatus" class="status">Unknown</span>
+        </div>
+        <p>This will test the OpenAI integration.</p>
+        <input type="text" id="messageInput" placeholder="Enter a message to send to the API" value="Tell me about income tax.">
+        <button id="chatApiBtn">Test Chat API</button>
+        <div id="chatResult" class="result"></div>
+    </div>
+
+    <div class="container">
+        <h2>Browser Information</h2>
+        <div id="browserInfo" class="result"></div>
+    </div>
+
+    <script>
+        // Display browser information
+        function showBrowserInfo() {
+            const browserInfoDiv = document.getElementById('browserInfo');
+            browserInfoDiv.innerHTML = `
+                <strong>User Agent:</strong> ${navigator.userAgent}
+                <br><strong>Browser:</strong> ${navigator.appName}
+                <br><strong>Version:</strong> ${navigator.appVersion}
+                <br><strong>Platform:</strong> ${navigator.platform}
+                <br><strong>Cookies Enabled:</strong> ${navigator.cookieEnabled}
+                <br><strong>Language:</strong> ${navigator.language}
+            `;
+        }
+
+        // Test the /api/test endpoint
+        async function testApiEndpoint() {
+            const testResultDiv = document.getElementById('testResult');
+            const testStatusSpan = document.getElementById('testStatus');
+            
+            testResultDiv.className = 'result loading';
+            testResultDiv.textContent = 'Testing API...';
+            testStatusSpan.textContent = 'Testing...';
+            testStatusSpan.style.backgroundColor = '#fff3cd';
+            
+            try {
+                console.log('Fetching /api/test...');
+                const startTime = new Date();
+                
+                const response = await fetch('/api/test', {
+                    method: 'GET',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                
+                const endTime = new Date();
+                const duration = endTime - startTime;
+                
+                console.log('Response status:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('API test response:', data);
+                    
+                    testResultDiv.className = 'result success';
+                    testResultDiv.innerHTML = `
+                        <strong>Status:</strong> ${response.status} ${response.statusText}
+                        <br><strong>Time:</strong> ${duration}ms
+                        <br><strong>API Key Configured:</strong> ${data.apiKeyConfigured ? 'Yes' : 'No'}
+                        <br><strong>Environment:</strong> ${JSON.stringify(data.environment, null, 2)}
+                        <br><strong>Headers:</strong> ${JSON.stringify(data.headers, null, 2)}
+                        <br><strong>Full Response:</strong> <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    
+                    testStatusSpan.textContent = 'Online';
+                    testStatusSpan.style.backgroundColor = '#d4edda';
+                } else {
+                    let errorText = `Status: ${response.status} ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorText += `\nError details: ${JSON.stringify(errorData, null, 2)}`;
+                    } catch (e) {
+                        errorText += '\nCould not parse error response';
+                    }
+                    
+                    testResultDiv.className = 'result error';
+                    testResultDiv.textContent = errorText;
+                    
+                    testStatusSpan.textContent = 'Error';
+                    testStatusSpan.style.backgroundColor = '#f8d7da';
+                }
+            } catch (error) {
+                console.error('Error testing API:', error);
+                
+                testResultDiv.className = 'result error';
+                testResultDiv.textContent = `Error: ${error.message}`;
+                
+                testStatusSpan.textContent = 'Offline';
+                testStatusSpan.style.backgroundColor = '#f8d7da';
+            }
+        }
+
+        // Test the /api/chat endpoint
+        async function testChatEndpoint() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message) {
+                alert('Please enter a message');
+                return;
+            }
+            
+            const chatResultDiv = document.getElementById('chatResult');
+            const chatStatusSpan = document.getElementById('chatStatus');
+            
+            chatResultDiv.className = 'result loading';
+            chatResultDiv.textContent = 'Sending message to API...';
+            chatStatusSpan.textContent = 'Testing...';
+            chatStatusSpan.style.backgroundColor = '#fff3cd';
+            
+            try {
+                console.log('Sending message to /api/chat:', message);
+                const startTime = new Date();
+                
+                const response = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ message }),
+                });
+                
+                const endTime = new Date();
+                const duration = endTime - startTime;
+                
+                console.log('Response status:', response.status);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Chat API response:', data);
+                    
+                    chatResultDiv.className = 'result success';
+                    chatResultDiv.innerHTML = `
+                        <strong>Status:</strong> ${response.status} ${response.statusText}
+                        <br><strong>Time:</strong> ${duration}ms
+                        <br><strong>Response:</strong> ${data.message}
+                        <br><strong>Full Response:</strong> <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                    
+                    chatStatusSpan.textContent = 'Working';
+                    chatStatusSpan.style.backgroundColor = '#d4edda';
+                } else {
+                    let errorText = `Status: ${response.status} ${response.statusText}`;
+                    try {
+                        const errorData = await response.json();
+                        errorText += `\nError details: ${JSON.stringify(errorData, null, 2)}`;
+                    } catch (e) {
+                        errorText += '\nCould not parse error response';
+                    }
+                    
+                    chatResultDiv.className = 'result error';
+                    chatResultDiv.textContent = errorText;
+                    
+                    chatStatusSpan.textContent = 'Error';
+                    chatStatusSpan.style.backgroundColor = '#f8d7da';
+                }
+            } catch (error) {
+                console.error('Error testing chat API:', error);
+                
+                chatResultDiv.className = 'result error';
+                chatResultDiv.textContent = `Error: ${error.message}`;
+                
+                chatStatusSpan.textContent = 'Error';
+                chatStatusSpan.style.backgroundColor = '#f8d7da';
+            }
+        }
+
+        // Set up event listeners
+        document.getElementById('testApiBtn').addEventListener('click', testApiEndpoint);
+        document.getElementById('chatApiBtn').addEventListener('click', testChatEndpoint);
+        document.getElementById('messageInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                testChatEndpoint();
+            }
+        });
+
+        // Initialize
+        showBrowserInfo();
+    </script>
+</body>
+</html> 

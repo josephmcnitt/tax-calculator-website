@@ -9,7 +9,7 @@ export default function handler(req, res) {
   );
   
   // Set security headers
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' https://*.vercel.app; style-src 'self' 'unsafe-inline';");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-eval' 'unsafe-inline'; connect-src 'self' https://*.vercel.app https://*.openai.com https://api.openai.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:;");
   res.setHeader('X-Content-Type-Options', 'nosniff');
 
   // Handle OPTIONS request

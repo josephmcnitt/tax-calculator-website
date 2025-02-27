@@ -22,7 +22,11 @@ const ChatBot = () => {
       setServerStatus('checking');
       console.log('Checking server status...');
       
-      const response = await fetch('/api/test', {
+      // Use absolute URL to avoid CSP issues
+      const apiUrl = window.location.origin + '/api/test';
+      console.log('API URL:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
@@ -122,8 +126,12 @@ const ChatBot = () => {
         endpoint: '/api/chat'
       });
       
+      // Use absolute URL to avoid CSP issues
+      const apiUrl = window.location.origin + '/api/chat';
+      console.log('API URL:', apiUrl);
+      
       // Create the fetch promise
-      const fetchPromise = fetch('/api/chat', {
+      const fetchPromise = fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -202,6 +210,9 @@ const ChatBot = () => {
           setServerStatus('offline');
         } else if (error.message.includes('timed out')) {
           errorMessage = 'Request timed out. The server might be experiencing high load.';
+        } else if (error.message.includes('Content Security Policy')) {
+          errorMessage = 'Content Security Policy error. Please contact the administrator.';
+          console.error('CSP Error:', error);
         }
         
         setMessages(prev => [...prev, { 
