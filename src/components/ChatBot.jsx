@@ -25,6 +25,8 @@ const ChatBot = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        mode: 'cors',  // Explicitly set CORS mode
+        credentials: 'same-origin'  // Adjust as needed
       }).catch(error => {
         console.error('Server check failed:', error);
         throw new Error('Cannot connect to server');
@@ -107,6 +109,8 @@ const ChatBot = () => {
         headers: {
           'Content-Type': 'application/json',
         },
+        mode: 'cors',  // Explicitly set CORS mode
+        credentials: 'same-origin',  // Adjust as needed
         body: JSON.stringify({ message: messageText }),
       });
       
