@@ -48,6 +48,7 @@ const ChatBot = () => {
     setError(null);
     
     try {
+      console.log('Sending message to API:', messageText);
       const response = await fetch('http://localhost:3001/api/chat', {
         method: 'POST',
         headers: {
@@ -56,48 +57,52 @@ const ChatBot = () => {
         body: JSON.stringify({ message: messageText }),
       });
 
-      const data = await response.json();
-      
-      // Check if we hit a rate limit
-      if (response.status === 429) {
-        setIsRateLimited(true);
-        setRetryCount(prev => prev + 1);
+      // First check if the response is ok
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('API Error:', response.status, errorData);
         
-        // Only add the rate limit message if it's the first attempt
-        if (retryCount === 0) {
-          setMessages(prev => [...prev, { 
-            role: 'assistant', 
-            content: 'I\'m currently experiencing high demand. Please wait while I try again...' 
-          }]);
-        }
-        
-        return;
-      }
-      
-      // Check for timeout
-      if (response.status === 408) {
-        if (retryCount < 3) {
-          // Retry automatically for timeouts
-          setRetryCount(prev => prev + 1);
+        // Check if we hit a rate limit
+        if (response.status === 429) {
           setIsRateLimited(true);
+          setRetryCount(prev => prev + 1);
           
+          // Only add the rate limit message if it's the first attempt
           if (retryCount === 0) {
             setMessages(prev => [...prev, { 
               role: 'assistant', 
-              content: 'The request is taking longer than expected. I\'ll try again shortly...' 
+              content: 'I\'m currently experiencing high demand. Please wait while I try again...' 
             }]);
           }
+          
           return;
-        } else {
-          // After 3 retries, give up
-          throw new Error('Request timed out after multiple attempts');
         }
+        
+        // Check for timeout
+        if (response.status === 408) {
+          if (retryCount < 3) {
+            // Retry automatically for timeouts
+            setRetryCount(prev => prev + 1);
+            setIsRateLimited(true);
+            
+            if (retryCount === 0) {
+              setMessages(prev => [...prev, { 
+                role: 'assistant', 
+                content: 'The request is taking longer than expected. I\'ll try again shortly...' 
+              }]);
+            }
+            return;
+          } else {
+            // After 3 retries, give up
+            throw new Error('Request timed out after multiple attempts');
+          }
+        }
+        
+        // For other errors, throw with the server's error message if available
+        throw new Error(errorData.message || `Server responded with status: ${response.status}`);
       }
-      
-      // Handle other error status codes
-      if (response.status !== 200) {
-        throw new Error(`Server responded with status: ${response.status}`);
-      }
+
+      const data = await response.json();
       
       // Reset retry count on successful response
       setRetryCount(0);
@@ -112,6 +117,10 @@ const ChatBot = () => {
       // Customize error message based on the error
       if (error.message.includes('timed out')) {
         errorMessage = 'The request timed out. The service might be experiencing high load. Please try again later.';
+      } else if (error.message.includes('authentication problem')) {
+        errorMessage = 'There is an issue with the AI service authentication. The administrator has been notified.';
+      } else if (error.message.includes('API Error')) {
+        errorMessage = error.message; // Use the server's error message
       } else if (!navigator.onLine) {
         errorMessage = 'You appear to be offline. Please check your internet connection and try again.';
       }

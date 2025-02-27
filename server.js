@@ -19,7 +19,7 @@ const configuration = new Configuration({
 const openai = new OpenAIApi(configuration);
 
 // Helper function to call OpenAI with timeout and retry
-async function callOpenAIWithRetry(message, maxRetries = 2, timeout = 10000) {
+async function callOpenAIWithRetry(message, maxRetries = 2, timeout = 15000) {  // Increased timeout
   let retries = 0;
   
   while (retries <= maxRetries) {
@@ -42,12 +42,15 @@ async function callOpenAIWithRetry(message, maxRetries = 2, timeout = 10000) {
             content: message
           }
         ],
+        max_tokens: 500,  // Limit response size to avoid timeouts
+        temperature: 0.7,
       });
       
       // Race the timeout against the API call
       const result = await Promise.race([apiCallPromise, timeoutPromise]);
       return result;
     } catch (error) {
+      console.error('Error details:', error);
       retries++;
       
       // If we've used all retries, or it's not a retryable error, throw it
@@ -111,7 +114,9 @@ app.post('/api/chat', async (req, res) => {
       return res.status(400).json({ message: 'Message is required' });
     }
 
+    console.log('Processing message:', message);
     const completion = await callOpenAIWithRetry(message);
+    console.log('Received response from OpenAI');
     res.status(200).json({ message: completion.data.choices[0].message.content });
   } catch (error) {
     // Log detailed error information
@@ -124,6 +129,14 @@ app.post('/api/chat', async (req, res) => {
       console.error('Status:', error.response.status);
       console.error('Headers:', JSON.stringify(error.response.headers, null, 2));
       console.error('Data:', JSON.stringify(error.response.data, null, 2));
+      
+      // Check if the error is related to the API key
+      if (error.response.status === 401) {
+        console.error('API Key Error: The API key might be invalid, expired, or revoked.');
+        return res.status(500).json({ 
+          message: 'There was an authentication problem with the AI service. Please contact support.' 
+        });
+      }
     } else if (error.request) {
       // The request was made but no response was received
       console.error('No response received from OpenAI API:');
