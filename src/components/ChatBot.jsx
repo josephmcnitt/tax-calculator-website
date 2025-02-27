@@ -13,23 +13,32 @@ const ChatBot = () => {
   const lastMessageRef = useRef('');
   const chatContainerRef = useRef(null);
   
-  // Check server status on component mount
+  // Check server status on component mount - only on client side
   useEffect(() => {
-    checkServerStatus();
-    
-    // Add periodic server status check every 30 seconds
-    const intervalId = setInterval(() => {
-      if (serverStatus === 'offline') {
-        console.log('Periodic server status check...');
-        checkServerStatus();
-      }
-    }, 30000);
-    
-    return () => clearInterval(intervalId);
+    // Make sure we're running in the browser
+    if (typeof window !== 'undefined') {
+      checkServerStatus();
+      
+      // Add periodic server status check every 30 seconds
+      const intervalId = setInterval(() => {
+        if (serverStatus === 'offline') {
+          console.log('Periodic server status check...');
+          checkServerStatus();
+        }
+      }, 30000);
+      
+      return () => clearInterval(intervalId);
+    }
   }, [serverStatus]);
   
   // Function to check if the server is running
   const checkServerStatus = async () => {
+    // Make sure we're running in the browser
+    if (typeof window === 'undefined') {
+      console.log('Running in server environment, skipping server status check');
+      return false;
+    }
+    
     try {
       setServerStatus('checking');
       console.log('Checking server status...');
@@ -124,6 +133,13 @@ const ChatBot = () => {
 
   const sendMessage = async (messageText) => {
     if (!messageText.trim()) return;
+    
+    // Store the message for potential retries
+    lastMessageRef.current = messageText;
+    
+    // Add user message to chat
+    setMessages(prev => [...prev, { role: 'user', content: messageText }]);
+    setInput('');
     
     // Check server status before sending message
     if (serverStatus !== 'online') {
@@ -250,107 +266,101 @@ const ChatBot = () => {
           // Update server status
           setServerStatus('offline');
         } else if (error.message.includes('timed out')) {
-          errorMessage = 'Request timed out. The server might be experiencing high load.';
-        } else if (error.message.includes('Content Security Policy')) {
-          errorMessage = 'Content Security Policy error. Please contact the administrator.';
-          console.error('CSP Error:', error);
+          errorMessage = 'The request timed out. The server might be overloaded or unreachable.';
         }
         
         setMessages(prev => [...prev, { 
           role: 'assistant', 
-          content: `I'm sorry, I encountered an error: ${errorMessage}. Please try again later.` 
+          content: `I'm sorry, there was an error: ${errorMessage}` 
         }]);
+        
+        setError(errorMessage);
       }
     } finally {
-      if (!isRateLimited) {
-        setIsLoading(false);
-      }
+      setIsLoading(false);
     }
   };
-
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!input.trim()) return;
-
-    // Add user message
-    const userMessage = { role: 'user', content: input };
-    setMessages([...messages, userMessage]);
-    const userInput = input;
-    setInput('');
-    lastMessageRef.current = userInput; // Save the message for potential retries
-    
-    // Call the sendMessage function
-    await sendMessage(userInput);
+    if (input.trim() && !isLoading) {
+      await sendMessage(input);
+    }
   };
   
   const handleRetry = () => {
-    setRetryCount(0);
-    setError(null);
-    checkServerStatus().then(isOnline => {
-      if (isOnline) {
-        sendMessage(lastMessageRef.current);
-      }
-    });
+    if (lastMessageRef.current && !isLoading) {
+      setError(null);
+      setRetryCount(0);
+      setIsRateLimited(false);
+      sendMessage(lastMessageRef.current);
+    }
   };
-
-  // Calculate retry delay with exponential backoff
+  
   const getRetryDelay = () => {
-    const baseDelay = 2000; // 2 seconds
-    return Math.min(baseDelay * Math.pow(2, retryCount), 30000); // Max 30 seconds
+    // Exponential backoff with jitter
+    const baseDelay = 1000; // 1 second
+    const maxDelay = 10000; // 10 seconds
+    const exponentialDelay = Math.min(baseDelay * Math.pow(2, retryCount), maxDelay);
+    const jitter = Math.random() * 0.3 * exponentialDelay; // Add up to 30% jitter
+    return Math.floor(exponentialDelay + jitter);
   };
-
+  
   return (
-    <div className="fixed bottom-4 right-4 w-96 bg-white shadow-lg rounded-lg">
-      <div className="p-4 border-b flex justify-between items-center">
-        <h3 className="text-lg font-semibold">Tax Assistant</h3>
+    <div className="flex flex-col h-full max-w-2xl mx-auto p-4 bg-white rounded-lg shadow">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold">Tax Assistant</h2>
         <div className="flex items-center">
           <div className={`w-3 h-3 rounded-full mr-2 ${
             serverStatus === 'online' ? 'bg-green-500' : 
             serverStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
           }`}></div>
-          <span className="text-xs mr-2">
-            {serverStatus === 'online' ? 'Online' : 
-             serverStatus === 'offline' ? 'Offline' : 'Checking...'}
+          <span className="text-sm text-gray-600">
+            {serverStatus === 'online' ? 'Server Online' : 
+             serverStatus === 'offline' ? 'Server Offline' : 'Checking Server...'}
           </span>
-          {messages.length > 0 && (
-            <button 
-              onClick={() => setMessages([])} 
-              className="text-xs text-gray-500 hover:text-gray-700"
-            >
-              Clear Chat
-            </button>
-          )}
         </div>
       </div>
-      <div ref={chatContainerRef} className="h-96 overflow-y-auto p-4">
+      
+      {serverStatus === 'offline' && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <p className="font-bold">Server is offline</p>
+          <p>Please start the server or try again later.</p>
+          <button 
+            onClick={checkServerStatus}
+            className="mt-2 bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
+          >
+            Check Again
+          </button>
+        </div>
+      )}
+      
+      <div 
+        ref={chatContainerRef}
+        className="flex-1 overflow-y-auto mb-4 p-4 bg-gray-50 rounded"
+        style={{ minHeight: '300px', maxHeight: '60vh' }}
+      >
         {messages.length === 0 ? (
-          <div className="text-center text-gray-500 mt-32">
-            <p>Ask me anything about taxes, government spending, or financial matters.</p>
-            {serverStatus === 'offline' && (
-              <div className="text-red-500 mt-2">
-                <p>Server is offline. Please try again later.</p>
-                <button 
-                  onClick={checkServerStatus}
-                  className="mt-2 px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-                >
-                  Check Connection
-                </button>
-              </div>
-            )}
+          <div className="text-center text-gray-500 mt-10">
+            <p>Ask me anything about taxes!</p>
+            <p className="text-sm mt-2">For example:</p>
+            <ul className="text-sm mt-1">
+              <li>"What tax deductions are available for small businesses?"</li>
+              <li>"How do I calculate my self-employment tax?"</li>
+              <li>"What's the difference between standard and itemized deductions?"</li>
+            </ul>
           </div>
         ) : (
           messages.map((msg, index) => (
-            <div
-              key={index}
-              className={`mb-4 ${
-                msg.role === 'user' ? 'text-right' : 'text-left'
-              }`}
+            <div 
+              key={index} 
+              className={`mb-4 ${msg.role === 'user' ? 'text-right' : 'text-left'}`}
             >
-              <div
-                className={`inline-block p-2 rounded-lg ${
-                  msg.role === 'user'
-                    ? 'bg-blue-500 text-white'
-                    : 'bg-gray-200 text-gray-800'
+              <div 
+                className={`inline-block p-3 rounded-lg ${
+                  msg.role === 'user' 
+                    ? 'bg-blue-500 text-white rounded-br-none' 
+                    : 'bg-gray-200 text-gray-800 rounded-bl-none'
                 }`}
               >
                 {msg.content}
@@ -359,46 +369,97 @@ const ChatBot = () => {
           ))
         )}
         {isLoading && (
-          <div className="text-center text-gray-500">
-            <p>Thinking...</p>
-          </div>
-        )}
-        {isRateLimited && !isLoading && (
-          <div className="text-center text-yellow-500 mt-2">
-            <p>Service is busy. Retrying in {Math.round(getRetryDelay() / 1000)} seconds...</p>
-          </div>
-        )}
-        {error && !isLoading && !isRateLimited && (
-          <div className="text-center text-red-500 mt-2">
-            <p>{error}</p>
-            <button 
-              onClick={handleRetry}
-              className="mt-2 px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
-            >
-              Retry
-            </button>
+          <div className="text-left mb-4">
+            <div className="inline-block p-3 rounded-lg bg-gray-200 text-gray-800 rounded-bl-none">
+              <div className="flex items-center">
+                <div className="dot-typing"></div>
+              </div>
+            </div>
           </div>
         )}
       </div>
-      <form onSubmit={handleSubmit} className="p-4 border-t">
-        <div className="flex">
-          <input
-            type="text"
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask a question..."
-            className="flex-grow p-2 border rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading || serverStatus === 'offline'}
-          />
-          <button
-            type="submit"
-            className="bg-blue-500 text-white p-2 rounded-r hover:bg-blue-600 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            disabled={isLoading || serverStatus === 'offline'}
-          >
-            Send
-          </button>
+      
+      {error && !isRateLimited && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          <p className="font-bold">Error</p>
+          <p>{error}</p>
+          {lastMessageRef.current && (
+            <button 
+              onClick={handleRetry}
+              className="mt-2 bg-red-500 hover:bg-red-700 text-white font-bold py-1 px-2 rounded text-sm"
+            >
+              Retry
+            </button>
+          )}
         </div>
+      )}
+      
+      {isRateLimited && (
+        <div className="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded mb-4">
+          <p className="font-bold">Rate Limited</p>
+          <p>Too many requests. Retrying automatically...</p>
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} className="flex">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Type your tax question here..."
+          className="flex-1 p-2 border border-gray-300 rounded-l focus:outline-none focus:ring-2 focus:ring-blue-500"
+          disabled={isLoading || serverStatus === 'offline'}
+        />
+        <button
+          type="submit"
+          className={`px-4 py-2 rounded-r font-bold text-white ${
+            isLoading || input.trim() === '' || serverStatus === 'offline'
+              ? 'bg-gray-400 cursor-not-allowed'
+              : 'bg-blue-500 hover:bg-blue-700'
+          }`}
+          disabled={isLoading || input.trim() === '' || serverStatus === 'offline'}
+        >
+          Send
+        </button>
       </form>
+      
+      <style jsx>{`
+        .dot-typing {
+          position: relative;
+          left: -9999px;
+          width: 10px;
+          height: 10px;
+          border-radius: 5px;
+          background-color: #6b7280;
+          color: #6b7280;
+          box-shadow: 9984px 0 0 0 #6b7280, 9999px 0 0 0 #6b7280, 10014px 0 0 0 #6b7280;
+          animation: dot-typing 1.5s infinite linear;
+        }
+        
+        @keyframes dot-typing {
+          0% {
+            box-shadow: 9984px 0 0 0 #6b7280, 9999px 0 0 0 #6b7280, 10014px 0 0 0 #6b7280;
+          }
+          16.667% {
+            box-shadow: 9984px -10px 0 0 #6b7280, 9999px 0 0 0 #6b7280, 10014px 0 0 0 #6b7280;
+          }
+          33.333% {
+            box-shadow: 9984px 0 0 0 #6b7280, 9999px 0 0 0 #6b7280, 10014px 0 0 0 #6b7280;
+          }
+          50% {
+            box-shadow: 9984px 0 0 0 #6b7280, 9999px -10px 0 0 #6b7280, 10014px 0 0 0 #6b7280;
+          }
+          66.667% {
+            box-shadow: 9984px 0 0 0 #6b7280, 9999px 0 0 0 #6b7280, 10014px 0 0 0 #6b7280;
+          }
+          83.333% {
+            box-shadow: 9984px 0 0 0 #6b7280, 9999px 0 0 0 #6b7280, 10014px -10px 0 0 #6b7280;
+          }
+          100% {
+            box-shadow: 9984px 0 0 0 #6b7280, 9999px 0 0 0 #6b7280, 10014px 0 0 0 #6b7280;
+          }
+        }
+      `}</style>
     </div>
   );
 };

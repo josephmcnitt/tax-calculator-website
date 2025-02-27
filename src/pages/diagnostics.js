@@ -5,17 +5,37 @@ export default function Diagnostics() {
   const [apiResponse, setApiResponse] = useState(null);
   const [error, setError] = useState(null);
   const [logs, setLogs] = useState([]);
+  const [browserInfo, setBrowserInfo] = useState(null);
 
   const addLog = (message, type = 'info') => {
     const timestamp = new Date().toISOString();
     setLogs(prev => [...prev, { timestamp, message, type }]);
   };
 
+  // Only run on client-side
+  useEffect(() => {
+    // Set browser information once component is mounted (client-side only)
+    setBrowserInfo({
+      userAgent: navigator.userAgent,
+      origin: window.location.origin,
+      protocol: window.location.protocol
+    });
+    
+    addLog('Diagnostics page loaded', 'info');
+    checkApiStatus();
+  }, []);
+
   const checkApiStatus = async () => {
     try {
       addLog('Checking API status...', 'info');
       setApiStatus('checking');
       setError(null);
+
+      // Only run on client-side
+      if (typeof window === 'undefined') {
+        addLog('Running in server environment, skipping API check', 'info');
+        return;
+      }
 
       // Use absolute URL to avoid CSP issues
       const apiUrl = window.location.origin + '/api/test';
@@ -74,11 +94,6 @@ export default function Diagnostics() {
     }
   };
 
-  useEffect(() => {
-    addLog('Diagnostics page loaded', 'info');
-    checkApiStatus();
-  }, []);
-
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">API Diagnostics</h1>
@@ -120,25 +135,27 @@ export default function Diagnostics() {
         </div>
       )}
       
-      <div className="mb-6">
-        <h2 className="text-xl font-semibold mb-2">Browser Information</h2>
-        <table className="min-w-full bg-white">
-          <tbody>
-            <tr className="border-b">
-              <td className="px-4 py-2 font-semibold">User Agent</td>
-              <td className="px-4 py-2">{navigator.userAgent}</td>
-            </tr>
-            <tr className="border-b">
-              <td className="px-4 py-2 font-semibold">Origin</td>
-              <td className="px-4 py-2">{window.location.origin}</td>
-            </tr>
-            <tr className="border-b">
-              <td className="px-4 py-2 font-semibold">Protocol</td>
-              <td className="px-4 py-2">{window.location.protocol}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      {browserInfo && (
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold mb-2">Browser Information</h2>
+          <table className="min-w-full bg-white">
+            <tbody>
+              <tr className="border-b">
+                <td className="px-4 py-2 font-semibold">User Agent</td>
+                <td className="px-4 py-2">{browserInfo.userAgent}</td>
+              </tr>
+              <tr className="border-b">
+                <td className="px-4 py-2 font-semibold">Origin</td>
+                <td className="px-4 py-2">{browserInfo.origin}</td>
+              </tr>
+              <tr className="border-b">
+                <td className="px-4 py-2 font-semibold">Protocol</td>
+                <td className="px-4 py-2">{browserInfo.protocol}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      )}
       
       <div>
         <h2 className="text-xl font-semibold mb-2">Logs</h2>
