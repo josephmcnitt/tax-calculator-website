@@ -20,6 +20,8 @@ const ChatBot = () => {
   const checkServerStatus = async () => {
     try {
       setServerStatus('checking');
+      console.log('Checking server status...');
+      
       const response = await fetch('/api/test', {
         method: 'GET',
         headers: {
@@ -33,9 +35,18 @@ const ChatBot = () => {
       });
       
       if (response.ok) {
+        const data = await response.json();
+        console.log('Server status check response:', data);
         setServerStatus('online');
         return true;
       } else {
+        console.error('Server status check failed with status:', response.status);
+        try {
+          const errorData = await response.json();
+          console.error('Server error details:', errorData);
+        } catch (e) {
+          console.error('Could not parse server error response');
+        }
         setServerStatus('offline');
         return false;
       }
@@ -103,6 +114,14 @@ const ChatBot = () => {
         setTimeout(() => reject(new Error('Request timed out')), 30000);
       });
       
+      // Log request details
+      const requestStartTime = new Date();
+      console.log('Chat request details:', {
+        timestamp: requestStartTime.toISOString(),
+        messageLength: messageText.length,
+        endpoint: '/api/chat'
+      });
+      
       // Create the fetch promise
       const fetchPromise = fetch('/api/chat', {
         method: 'POST',
@@ -117,13 +136,27 @@ const ChatBot = () => {
       // Race the timeout against the fetch
       const response = await Promise.race([fetchPromise, timeoutPromise]);
       
-      console.log('Response status:', response.status);
+      const requestEndTime = new Date();
+      const requestDuration = requestEndTime - requestStartTime;
+      console.log('Response received:', {
+        status: response.status,
+        statusText: response.statusText,
+        duration: requestDuration + 'ms',
+        headers: {
+          contentType: response.headers.get('content-type'),
+          contentLength: response.headers.get('content-length')
+        }
+      });
       
       if (!response.ok) {
         let errorMessage = 'Failed to get response';
+        let errorDetails = {};
+        
         try {
           const errorData = await response.json();
+          console.error('Error response data:', errorData);
           errorMessage = errorData.message || errorData.error || errorMessage;
+          errorDetails = errorData;
           
           // Check if it's a rate limit error
           if (response.status === 429 || errorData.error === 'RATE_LIMIT') {
@@ -134,10 +167,26 @@ const ChatBot = () => {
         } catch (jsonError) {
           console.error('Error parsing error response:', jsonError);
         }
+        
+        // Log detailed error information
+        console.error('API request failed:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorMessage,
+          errorDetails,
+          requestDuration
+        });
+        
         throw new Error(errorMessage);
       }
 
       const data = await response.json();
+      console.log('API response data:', {
+        status: data.status,
+        messageLength: data.message ? data.message.length : 0,
+        timestamp: new Date().toISOString()
+      });
+      
       setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
     } catch (error) {
       console.error('Error details:', error);

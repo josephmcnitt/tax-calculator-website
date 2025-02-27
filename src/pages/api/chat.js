@@ -1,9 +1,15 @@
 import OpenAI from 'openai';
 
-// Initialize the OpenAI client
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Initialize the OpenAI client with error handling
+let openai;
+try {
+  openai = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+  });
+  console.log('OpenAI client initialized successfully');
+} catch (error) {
+  console.error('Error initializing OpenAI client:', error);
+}
 
 export default async function handler(req, res) {
   // Set CORS headers
@@ -26,17 +32,34 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Check if OpenAI client was initialized successfully
+    if (!openai) {
+      throw new Error('OpenAI client was not initialized properly');
+    }
+
     const { message } = req.body;
     
     if (!message) {
       return res.status(400).json({ message: 'Message is required' });
     }
 
+    // Log request details
+    console.log('Chat API request received:', { 
+      timestamp: new Date().toISOString(),
+      messageLength: message.length,
+      headers: req.headers
+    });
+
     if (!process.env.OPENAI_API_KEY) {
       console.error('OPENAI_API_KEY is not defined');
-      return res.status(500).json({ message: 'OpenAI API key is not configured' });
+      return res.status(500).json({ 
+        message: 'OpenAI API key is not configured',
+        error: 'MISSING_API_KEY',
+        details: 'The server is missing the OpenAI API key configuration'
+      });
     }
 
+    console.log('Sending request to OpenAI API...');
     const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
@@ -51,14 +74,49 @@ export default async function handler(req, res) {
       ],
     });
 
+    console.log('OpenAI API response received successfully');
     const responseMessage = completion.choices[0].message.content;
-    return res.status(200).json({ message: responseMessage });
+    return res.status(200).json({ 
+      message: responseMessage,
+      status: 'success'
+    });
     
   } catch (error) {
-    console.error('Error in chat API:', error.message);
-    res.status(500).json({ 
-      message: 'An error occurred while processing your request.',
-      error: error.message
+    // Enhanced error logging
+    console.error('Error in chat API:', {
+      message: error.message,
+      stack: error.stack,
+      type: error.constructor.name,
+      timestamp: new Date().toISOString(),
+      statusCode: error.status || error.statusCode,
+      headers: req.headers
+    });
+
+    // Determine error type and provide more specific error message
+    let errorType = 'UNKNOWN_ERROR';
+    let statusCode = 500;
+    let errorMessage = 'An error occurred while processing your request.';
+    
+    if (error.message.includes('API key')) {
+      errorType = 'API_KEY_ERROR';
+      errorMessage = 'There was an issue with the OpenAI API key.';
+    } else if (error.message.includes('rate limit') || error.status === 429) {
+      errorType = 'RATE_LIMIT';
+      statusCode = 429;
+      errorMessage = 'OpenAI API rate limit exceeded. Please try again later.';
+    } else if (error.message.includes('timeout') || error.message.includes('ETIMEDOUT')) {
+      errorType = 'TIMEOUT';
+      errorMessage = 'Request to OpenAI API timed out.';
+    } else if (error.message.includes('network') || error.message.includes('ECONNREFUSED')) {
+      errorType = 'NETWORK_ERROR';
+      errorMessage = 'Network error while connecting to OpenAI API.';
+    }
+
+    res.status(statusCode).json({ 
+      message: errorMessage,
+      error: errorType,
+      details: error.message,
+      timestamp: new Date().toISOString()
     });
   }
 } 
