@@ -14,7 +14,17 @@ const ChatBot = () => {
   // Check server status on component mount
   useEffect(() => {
     checkServerStatus();
-  }, []);
+    
+    // Add periodic server status check every 30 seconds
+    const intervalId = setInterval(() => {
+      if (serverStatus === 'offline') {
+        console.log('Periodic server status check...');
+        checkServerStatus();
+      }
+    }, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, [serverStatus]);
   
   // Function to check if the server is running
   const checkServerStatus = async () => {
@@ -26,17 +36,35 @@ const ChatBot = () => {
       const apiUrl = window.location.origin + '/api/test';
       console.log('API URL:', apiUrl);
       
-      const response = await fetch(apiUrl, {
+      // Add cache-busting parameter to prevent caching
+      const urlWithCacheBuster = `${apiUrl}?t=${new Date().getTime()}`;
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      
+      const response = await fetch(urlWithCacheBuster, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
         mode: 'cors',  // Explicitly set CORS mode
-        credentials: 'same-origin'  // Adjust as needed
+        credentials: 'same-origin',  // Adjust as needed
+        signal: controller.signal
       }).catch(error => {
         console.error('Server check failed:', error);
-        throw new Error('Cannot connect to server');
+        if (error.name === 'AbortError') {
+          throw new Error('Server check timed out');
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          throw new Error('Connection refused. Server may be down or unreachable.');
+        } else {
+          throw error;
+        }
       });
+      
+      clearTimeout(timeoutId);
       
       if (response.ok) {
         const data = await response.json();
@@ -113,11 +141,6 @@ const ChatBot = () => {
     try {
       console.log('Sending message to API:', messageText);
       
-      // Create a timeout promise
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error('Request timed out')), 30000);
-      });
-      
       // Log request details
       const requestStartTime = new Date();
       console.log('Chat request details:', {
@@ -130,19 +153,35 @@ const ChatBot = () => {
       const apiUrl = window.location.origin + '/api/chat';
       console.log('API URL:', apiUrl);
       
-      // Create the fetch promise
-      const fetchPromise = fetch(apiUrl, {
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
+      // Create the fetch request
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache, no-store, must-revalidate',
+          'Pragma': 'no-cache',
+          'Expires': '0'
         },
         mode: 'cors',  // Explicitly set CORS mode
         credentials: 'same-origin',  // Adjust as needed
         body: JSON.stringify({ message: messageText }),
+        signal: controller.signal
+      }).catch(error => {
+        console.error('Fetch error:', error);
+        if (error.name === 'AbortError') {
+          throw new Error('Request timed out');
+        } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          throw new Error('Connection refused. Server may be down or unreachable.');
+        } else {
+          throw error;
+        }
       });
       
-      // Race the timeout against the fetch
-      const response = await Promise.race([fetchPromise, timeoutPromise]);
+      clearTimeout(timeoutId);
       
       const requestEndTime = new Date();
       const requestDuration = requestEndTime - requestStartTime;
@@ -204,8 +243,8 @@ const ChatBot = () => {
         let errorMessage = error.message;
         
         // Provide more user-friendly error messages
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
-          errorMessage = 'Network error. Please check your internet connection.';
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError') || error.message.includes('Connection refused')) {
+          errorMessage = 'Network error. The server appears to be down or unreachable. Please try again later.';
           // Update server status
           setServerStatus('offline');
         } else if (error.message.includes('timed out')) {
@@ -245,7 +284,11 @@ const ChatBot = () => {
   const handleRetry = () => {
     setRetryCount(0);
     setError(null);
-    sendMessage(lastMessageRef.current);
+    checkServerStatus().then(isOnline => {
+      if (isOnline) {
+        sendMessage(lastMessageRef.current);
+      }
+    });
   };
 
   // Calculate retry delay with exponential backoff
@@ -263,6 +306,10 @@ const ChatBot = () => {
             serverStatus === 'online' ? 'bg-green-500' : 
             serverStatus === 'offline' ? 'bg-red-500' : 'bg-yellow-500'
           }`}></div>
+          <span className="text-xs mr-2">
+            {serverStatus === 'online' ? 'Online' : 
+             serverStatus === 'offline' ? 'Offline' : 'Checking...'}
+          </span>
           {messages.length > 0 && (
             <button 
               onClick={() => setMessages([])} 
@@ -278,7 +325,15 @@ const ChatBot = () => {
           <div className="text-center text-gray-500 mt-32">
             <p>Ask me anything about taxes, government spending, or financial matters.</p>
             {serverStatus === 'offline' && (
-              <p className="text-red-500 mt-2">Server is offline. Please try again later.</p>
+              <div className="text-red-500 mt-2">
+                <p>Server is offline. Please try again later.</p>
+                <button 
+                  onClick={checkServerStatus}
+                  className="mt-2 px-4 py-1 bg-blue-500 text-white rounded hover:bg-blue-600"
+                >
+                  Check Connection
+                </button>
+              </div>
             )}
           </div>
         ) : (

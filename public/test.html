@@ -67,11 +67,23 @@
             padding: 5px 10px;
             border-radius: 20px;
         }
+        .connection-info {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e9ecef;
+            border-radius: 4px;
+        }
     </style>
 </head>
 <body>
     <h1>API Test Page</h1>
     <p>Use this page to test if the API endpoints are working correctly.</p>
+
+    <div class="connection-info">
+        <h3>Connection Information</h3>
+        <p><strong>Current URL:</strong> <span id="currentUrl"></span></p>
+        <p><strong>API Base URL:</strong> <span id="apiBaseUrl"></span></p>
+    </div>
 
     <div class="container">
         <div class="header">
@@ -95,11 +107,25 @@
     </div>
 
     <div class="container">
+        <div class="header">
+            <h2>Network Diagnostics</h2>
+            <button id="runDiagnosticsBtn">Run Diagnostics</button>
+        </div>
+        <div id="diagnosticsResult" class="result"></div>
+    </div>
+
+    <div class="container">
         <h2>Browser Information</h2>
         <div id="browserInfo" class="result"></div>
     </div>
 
     <script>
+        // Display connection information
+        function showConnectionInfo() {
+            document.getElementById('currentUrl').textContent = window.location.href;
+            document.getElementById('apiBaseUrl').textContent = window.location.origin;
+        }
+
         // Display browser information
         function showBrowserInfo() {
             const browserInfoDiv = document.getElementById('browserInfo');
@@ -110,7 +136,103 @@
                 <br><strong>Platform:</strong> ${navigator.platform}
                 <br><strong>Cookies Enabled:</strong> ${navigator.cookieEnabled}
                 <br><strong>Language:</strong> ${navigator.language}
+                <br><strong>Online Status:</strong> ${navigator.onLine ? 'Online' : 'Offline'}
+                <br><strong>Connection Type:</strong> ${navigator.connection ? navigator.connection.effectiveType : 'Unknown'}
             `;
+        }
+
+        // Run network diagnostics
+        async function runNetworkDiagnostics() {
+            const diagnosticsResultDiv = document.getElementById('diagnosticsResult');
+            diagnosticsResultDiv.className = 'result loading';
+            diagnosticsResultDiv.textContent = 'Running diagnostics...';
+            
+            const results = [];
+            
+            // Check online status
+            results.push(`Browser Online Status: ${navigator.onLine ? 'Online' : 'Offline'}`);
+            
+            // Test connection to common websites
+            const sitesToTest = [
+                { name: 'Google', url: 'https://www.google.com' },
+                { name: 'Vercel', url: 'https://vercel.com' },
+                { name: 'OpenAI', url: 'https://api.openai.com' }
+            ];
+            
+            for (const site of sitesToTest) {
+                try {
+                    const startTime = new Date();
+                    const response = await fetch(site.url, { 
+                        method: 'HEAD',
+                        mode: 'no-cors',
+                        cache: 'no-store'
+                    });
+                    const endTime = new Date();
+                    const duration = endTime - startTime;
+                    
+                    results.push(`Connection to ${site.name}: Success (${duration}ms)`);
+                } catch (error) {
+                    results.push(`Connection to ${site.name}: Failed (${error.message})`);
+                }
+            }
+            
+            // Test API endpoints with detailed error handling
+            try {
+                const apiUrl = window.location.origin + '/api/test';
+                const startTime = new Date();
+                
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 5000);
+                
+                const response = await fetch(apiUrl + '?t=' + new Date().getTime(), {
+                    method: 'GET',
+                    headers: {
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    },
+                    signal: controller.signal
+                }).catch(error => {
+                    if (error.name === 'AbortError') {
+                        throw new Error('Request timed out');
+                    }
+                    throw error;
+                });
+                
+                clearTimeout(timeoutId);
+                
+                const endTime = new Date();
+                const duration = endTime - startTime;
+                
+                if (response.ok) {
+                    results.push(`API Test Endpoint: Success (${duration}ms)`);
+                } else {
+                    results.push(`API Test Endpoint: Failed with status ${response.status} (${duration}ms)`);
+                }
+            } catch (error) {
+                results.push(`API Test Endpoint: Error - ${error.message}`);
+                
+                // Add more detailed diagnostics for connection refused errors
+                if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                    results.push(`
+                        Possible causes for connection refused:
+                        - Server is not running
+                        - Firewall is blocking the connection
+                        - Incorrect port or hostname
+                        - Network connectivity issues
+                        
+                        Recommendations:
+                        - Check if the server is running
+                        - Verify the URL is correct (${window.location.origin})
+                        - Check for any network issues
+                        - Try accessing the site from a different network
+                    `);
+                }
+            }
+            
+            // Display results
+            diagnosticsResultDiv.className = 'result';
+            diagnosticsResultDiv.innerHTML = results.join('<br><br>');
         }
 
         // Test the /api/test endpoint
@@ -127,12 +249,32 @@
                 console.log('Fetching /api/test...');
                 const startTime = new Date();
                 
-                const response = await fetch('/api/test', {
+                // Add cache-busting parameter and abort controller for timeout
+                const apiUrl = '/api/test?t=' + new Date().getTime();
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 10000);
+                
+                const response = await fetch(apiUrl, {
                     method: 'GET',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
+                    },
+                    signal: controller.signal
+                }).catch(error => {
+                    console.error('Fetch error:', error);
+                    if (error.name === 'AbortError') {
+                        throw new Error('Request timed out after 10 seconds');
+                    } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                        throw new Error('Connection refused. Server may be down or unreachable.');
+                    } else {
+                        throw error;
                     }
                 });
+                
+                clearTimeout(timeoutId);
                 
                 const endTime = new Date();
                 const duration = endTime - startTime;
@@ -174,7 +316,19 @@
                 console.error('Error testing API:', error);
                 
                 testResultDiv.className = 'result error';
-                testResultDiv.textContent = `Error: ${error.message}`;
+                testResultDiv.innerHTML = `
+                    <strong>Error:</strong> ${error.message}
+                    <br><br>
+                    <strong>Troubleshooting:</strong>
+                    ${error.message.includes('Connection refused') ? `
+                    <ul>
+                        <li>The server appears to be down or unreachable</li>
+                        <li>Check if the server is running</li>
+                        <li>Verify that the API endpoint is correct</li>
+                        <li>Check for any network or firewall issues</li>
+                    </ul>
+                    ` : ''}
+                `;
                 
                 testStatusSpan.textContent = 'Offline';
                 testStatusSpan.style.backgroundColor = '#f8d7da';
@@ -203,13 +357,32 @@
                 console.log('Sending message to /api/chat:', message);
                 const startTime = new Date();
                 
+                // Add abort controller for timeout
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 30000);
+                
                 const response = await fetch('/api/chat', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
+                        'Cache-Control': 'no-cache, no-store, must-revalidate',
+                        'Pragma': 'no-cache',
+                        'Expires': '0'
                     },
                     body: JSON.stringify({ message }),
+                    signal: controller.signal
+                }).catch(error => {
+                    console.error('Fetch error:', error);
+                    if (error.name === 'AbortError') {
+                        throw new Error('Request timed out after 30 seconds');
+                    } else if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+                        throw new Error('Connection refused. Server may be down or unreachable.');
+                    } else {
+                        throw error;
+                    }
                 });
+                
+                clearTimeout(timeoutId);
                 
                 const endTime = new Date();
                 const duration = endTime - startTime;
@@ -249,7 +422,19 @@
                 console.error('Error testing chat API:', error);
                 
                 chatResultDiv.className = 'result error';
-                chatResultDiv.textContent = `Error: ${error.message}`;
+                chatResultDiv.innerHTML = `
+                    <strong>Error:</strong> ${error.message}
+                    <br><br>
+                    <strong>Troubleshooting:</strong>
+                    ${error.message.includes('Connection refused') ? `
+                    <ul>
+                        <li>The server appears to be down or unreachable</li>
+                        <li>Check if the server is running</li>
+                        <li>Verify that the API endpoint is correct</li>
+                        <li>Check for any network or firewall issues</li>
+                    </ul>
+                    ` : ''}
+                `;
                 
                 chatStatusSpan.textContent = 'Error';
                 chatStatusSpan.style.backgroundColor = '#f8d7da';
@@ -259,6 +444,7 @@
         // Set up event listeners
         document.getElementById('testApiBtn').addEventListener('click', testApiEndpoint);
         document.getElementById('chatApiBtn').addEventListener('click', testChatEndpoint);
+        document.getElementById('runDiagnosticsBtn').addEventListener('click', runNetworkDiagnostics);
         document.getElementById('messageInput').addEventListener('keypress', (e) => {
             if (e.key === 'Enter') {
                 testChatEndpoint();
@@ -266,6 +452,7 @@
         });
 
         // Initialize
+        showConnectionInfo();
         showBrowserInfo();
     </script>
 </body>
